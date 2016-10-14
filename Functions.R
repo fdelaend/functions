@@ -375,16 +375,24 @@ PlotEvennessRichness <- function(Filename, CountCols, TimeName,
 #gets BD and EF using cosm data in the standard WUR file format
 #also: gets EF in systems that are treated but without species loss
 #Filename = name of txt file with count data
-#TreatmentName = name in the count data file used to indicate treatment level
+#TreatmentName = name in the count data file used to indicate treatment level. 
+#...Always needs to be 'Treatment'. Control always needs to be '1'.
 #TimeName = name in the count data file used to indicate time
 #Only time points that are >Affected and <NoAffected are considered
-#CountCols = columns where species counts are present: a vector with length = 2. If length = 1, it is assumed species counts start at CountCols and continue until the last column. 
-#CountCols is NA when there are no counts in the dataframe
-#endpoints= a list of endpoints. Note that only Richness and Evenness can be estimated from the data and only when counts are available. ALL OTHER ENDPOINTS SHOULD BE AVAILABLE AS COLUMN NAMES IN THE DATA FRAME
-#x = a fraction; if a species is present less than that fraction times the nr of observations it is thrown away
+#CountCols = columns where species counts are present: 
+#...a vector with length = 2. If length = 1, 
+#...it is assumed species counts start at CountCols and 
+#...continue until the last column (ncol()). 
+#CountCols should be set to NA when there are no counts in the dataframe
+#endpoints= a list of endpoints. 
+#...Note that only Richness or Evenness can be given
+#...Dissimilarity is calculated by default if counts are given
+#...(should not be specified in endpoints)
+#x = a fraction; if a species is present less than that fraction 
+#...times the nr of observations it is thrown away
 BDEF <- function(data, CountCols, TimeName, TreatmentName, 
                  Affected, NoAffected, 
-                 endpoints = c("Richness", "Evenness", "EF"),
+                 endpoints = c("Richness", "Evenness"),
                  x=0)
 {
   data[,TreatmentName] <- as.factor(data[,TreatmentName])
@@ -401,7 +409,8 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
   dataPost <- dataPost[which(dataPost[,TimeName]<NoAffected),]
 
   #0/Test if the dataframe contains counts. 
-  #If so, make an object 'counts' and plot a histogram, and calculate dissims
+  #If so, make an object 'counts' 
+  #...and calculate dissimilarity
   test <- is.na(CountCols)[1]
   if (test==FALSE)
   {
@@ -410,18 +419,32 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
     counts <- dataPost[,CountCols]
     #remove species that occur less than x% of the time
     rare <- which(colSums(counts>0, na.rm=TRUE)<x*nrow(counts))
-    if (length(rare) > 0)
+    if (length(rare) > 0) {counts <- counts[,-rare]}
+    #remove empty sites
+    empty <- which(as.numeric(rowSums(counts))==0)
+    if (length(empty) > 0) 
     {
-      counts <- counts[,-rare]
+      counts <- counts[-empty,]
+      dataPost <- dataPost[-empty,]
     }
-    #hist(colSums(counts>0, na.rm=TRUE), breaks=100, plot=TRUE)
-    indices <- t(combn(c(1:nrow(counts)),2))
-    Site_1 <- data[indices[,1],]
-    Site_2 <- data[indices[,2],]
-    Dissims <-cbind(as.numeric(vegdist(counts)),Site_1[,c(TimeName,TreatmentName)],
-                    Site_2[,c(TimeName,TreatmentName)])
-    colnames(Dissims) <- c("Dissim", "t1", "tr1", "t2", "tr2")
+    Dissims <- data.matrix(vegdist(counts))
+    diag(Dissims) <- NA #To see why this is needed, check below
+    #now loop over all rows 
+    #to get dissim with control at same time point
+    dataPost$Dissim <- NA
+    for (row in c(1:nrow(dataPost)))
+    {
+      #look for row with same time point but treatment of 1
+      Ind <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName]))
+      #When 'row' is a control row (i.e. when dataPost$Treatment[row]==1),
+      #...this 'row' will also be contained in Ind
+      #...and you don't want this since you're comparing a row to itself 
+      #...(always has dissimilarity of zero),
+      #...so that's why the diagonal of Dissims need to be 'NA'.
+      dataPost$Dissim[row] <- mean(Dissims[row,Ind], na.rm=TRUE)
+    }
   }
+
   #1/Get or calculate richness
   if ("Richness" %in% endpoints)
   {
@@ -438,43 +461,7 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
     if (test==TRUE) {evenness <- dataPost[,"Evenness"]}
     else {dataPost$Evenness <- diversity(counts)}
   }
-
-  #3/Do various summary stats for different endpoints 
-  AllMeans <- list()
-  for (endpoint in endpoints)
-  {
-    #Mean of all replicates
-    form <- paste(endpoint,"~", TimeName,"+", TreatmentName, sep="")
-    means <- aggregate(as.formula(form), mean, data=dataPost, 
-                       na.action="na.pass")
-    #get the bloody effects
-    means$Effect <- NA
-    means$EffectTzero <- NA
-    treats <- unique(means[,TreatmentName])
-    timepoints <- unique(means[,TimeName])
-    print(means)
-    for (treat in treats)
-    {
-      for (timepoint in timepoints)
-      {
-        controlRow <- which((means[,TreatmentName]==1)&(means[,TimeName]==timepoint))
-        tZeroRow   <- which((means[,TreatmentName]==treat)&(means[,TimeName]==min(timepoints)))
-        effectRow <- which((means[,TreatmentName]==treat)&(means[,TimeName]==timepoint))
-        means$Effect[effectRow] <- (means[effectRow,endpoint]/means[controlRow,endpoint])-1
-        means$EffectTzero[effectRow] <- (means[effectRow,endpoint]/means[tZeroRow,endpoint])-1
-      }
-    }
-#   print(repMean)
-    colnames(means)[ncol(means)-1] <- paste(endpoint,"Effect", sep="")
-    colnames(means)[ncol(means)] <- paste(endpoint,"EffectTzero", sep="")
-    AllMeans[[match(endpoint,endpoints)]] <- means
-    
-  }
-  names(AllMeans) <- endpoints
-  test <- is.na(CountCols)[1] #test again if this is a dataset with counts or not
-  if (test==FALSE) {AllMeans$Dissims <- Dissims} #add dissimilarity if appropriate
-  return(list(AllMeans))
-
+  return(dataPost)
 }
 
 RecoveryTime <- function(Effect, EffectCutOff=0.05, DaysBeforeEnd=31) 
