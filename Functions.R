@@ -386,7 +386,7 @@ PlotEvennessRichness <- function(Filename, CountCols, TimeName,
 #CountCols should be set to NA when there are no counts in the dataframe
 #endpoints= a list of endpoints. 
 #...Note that only Richness or Evenness can be given
-#...Dissimilarity is calculated by default if counts are given
+#...Similarity is calculated by default if counts are given
 #...(should not be specified in endpoints)
 #x = a fraction; if a species is present less than that fraction 
 #...times the nr of observations it is thrown away
@@ -410,7 +410,7 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
 
   #0/Test if the dataframe contains counts. 
   #If so, make an object 'counts' 
-  #...and calculate dissimilarity
+  #...and calculate similarity
   test <- is.na(CountCols)[1]
   if (test==FALSE)
   {
@@ -427,11 +427,12 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
       counts <- counts[-empty,]
       dataPost <- dataPost[-empty,]
     }
-    Dissims <- data.matrix(vegdist(counts))
-    diag(Dissims) <- NA #To see why this is needed, check below
+    Sims <- data.matrix(vegdist(counts))
+    diag(Sims) <- NA #To see why this is needed, check below
+    Sims <- 1-Sims #cause vegdist calculates dissimilarity
     #now loop over all rows 
-    #to get dissim with control at same time point
-    dataPost$Dissim <- NA
+    #to get Sim with control at same time point
+    dataPost$Sim <- NA
     for (row in c(1:nrow(dataPost)))
     {
       #look for row with same time point but treatment of 1
@@ -439,9 +440,9 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
       #When 'row' is a control row (i.e. when dataPost$Treatment[row]==1),
       #...this 'row' will also be contained in Ind
       #...and you don't want this since you're comparing a row to itself 
-      #...(always has dissimilarity of zero),
-      #...so that's why the diagonal of Dissims need to be 'NA'.
-      dataPost$Dissim[row] <- mean(Dissims[row,Ind], na.rm=TRUE)
+      #...(always has similarity of 1),
+      #...so that's why the diagonal of Sims need to be 'NA'.
+      dataPost$Sim[row] <- mean(Sims[row,Ind], na.rm=TRUE)
     }
   }
 
