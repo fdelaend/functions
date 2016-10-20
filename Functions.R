@@ -388,11 +388,16 @@ PlotEvennessRichness <- function(Filename, CountCols, TimeName,
 #...Note that only Richness or Evenness can be given
 #...Similarity is calculated by default if counts are given
 #...(should not be specified in endpoints)
+#systemTag = either NULL (no tag) or a string pointing to the 
+#...column that contains info on the system identity.
+#...If this is included, similarities will only 
+#...be calculated between sites that carry the same system tag.
 #x = a fraction; if a species is present less than that fraction 
 #...times the nr of observations it is thrown away
 BDEF <- function(data, CountCols, TimeName, TreatmentName, 
                  Affected, NoAffected, 
                  endpoints = c("Richness", "Evenness"),
+                 systemTag = NULL,
                  x=0)
 {
   data[,TreatmentName] <- as.factor(data[,TreatmentName])
@@ -442,6 +447,10 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
       #...and you don't want this since you're comparing a row to itself 
       #...(always has similarity of 1),
       #...so that's why the diagonal of Sims need to be 'NA'.
+      if (is.null(systemTag)==FALSE) 
+      {
+        Ind <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName])&(dataPost[,systemTag]==dataPost[row,systemTag]))
+      }
       dataPost$Sim[row] <- mean(Sims[row,Ind], na.rm=TRUE)
     }
   }
