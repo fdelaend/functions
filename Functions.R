@@ -1,4 +1,26 @@
 
+#Partition according to Fox 2005
+#M = vector with monocultures
+#Yo = vector with observed yields
+#Initial = vector with initial densities
+
+Fox2005 <- function(M, Yo, Initial)
+{
+  Richness <- length(M)
+  Ye <- 1/Richness * M
+  RYe <- rep(Initial/sum(Initial), Richness)
+  RYo <- Yo/M
+  DeltaRY <- RYo - RYe
+  RYo_RYot__Rye <- RYo/sum(RYo)-RYe
+  RYo_RYo__RYot <- RYo-RYo/sum(RYo)
+  TIC <- Richness * mean(M) * mean(DeltaRY)
+  DOM <- Richness * sum((RYo_RYot__Rye-mean(RYo_RYot__Rye))*(M-mean(M)))/Richness
+  TDC <- Richness * sum((RYo_RYo__RYot-mean(RYo_RYo__RYot))*(M-mean(M)))/Richness
+  #you can verify that TIC+DOM+TDC = sum(Yo_row-Ye_row)
+  if (abs((TIC+DOM+TDC) - sum(Yo_row-Ye_row)) > 1e-5) stop("!")
+  return(list(TIC=TIC, DOM=DOM, TDC=TDC))
+}
+
 #Calculates 
 #...connectances based on an abundance file and a food-web matrix
 #...and also nr of links for all pred and all prey
@@ -392,12 +414,14 @@ PlotEvennessRichness <- function(Filename, CountCols, TimeName,
 #...column that contains info on the system identity.
 #...If this is included, similarities will only 
 #...be calculated between sites that carry the same system tag.
+#Binary = passed on to the vegdist function
 #x = a fraction; if a species is present less than that fraction 
 #...times the nr of observations it is thrown away
 BDEF <- function(data, CountCols, TimeName, TreatmentName, 
                  Affected, NoAffected, 
                  endpoints = c("Richness", "Evenness"),
                  systemTag = NULL,
+                 Binary=FALSE, 
                  x=0)
 {
   data[,TreatmentName] <- as.factor(data[,TreatmentName])
@@ -433,6 +457,8 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
       dataPost <- dataPost[-empty,]
     }
     Sims <- data.matrix(vegdist(counts))
+    if (Binary) {Sims <- data.matrix(vegdist(decostand(counts,
+                                                       method="pa")))}
     diag(Sims) <- NA #To see why this is needed, check below
     Sims <- 1-Sims #cause vegdist calculates dissimilarity
     #now loop over all rows 
