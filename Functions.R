@@ -4,11 +4,11 @@
 #Yo = vector with observed yields
 #Initial = vector with initial densities
 
-Fox2005 <- function(M, Yo, Initial)
+Fox2005 <- function(M, Yo, Initial, Check=T)
 {
   Richness <- length(M)
-  Ye <- 1/Richness * M
-  RYe <- rep(Initial/sum(Initial), Richness)
+  Ye <- Initial/sum(Initial) * M
+  RYe <- Initial/sum(Initial)
   RYo <- Yo/M
   DeltaRY <- RYo - RYe
   RYo_RYot__Rye <- RYo/sum(RYo)-RYe
@@ -16,8 +16,11 @@ Fox2005 <- function(M, Yo, Initial)
   TIC <- Richness * mean(M) * mean(DeltaRY)
   DOM <- Richness * sum((RYo_RYot__Rye-mean(RYo_RYot__Rye))*(M-mean(M)))/Richness
   TDC <- Richness * sum((RYo_RYo__RYot-mean(RYo_RYo__RYot))*(M-mean(M)))/Richness
-  #you can verify that TIC+DOM+TDC = sum(Yo_row-Ye_row)
-  if (abs((TIC+DOM+TDC) - sum(Yo_row-Ye_row)) > 1e-5) stop("!")
+  #you can verify that TIC+DOM+TDC = sum(Yo-Ye)
+  if (Check==T)
+  {
+    if (abs((TIC+DOM+TDC) - sum(Yo-Ye)) > abs(sum(Yo-Ye))*1e-5) stop("!")
+  }
   return(list(TIC=TIC, DOM=DOM, TDC=TDC))
 }
 
