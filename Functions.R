@@ -1,4 +1,28 @@
 
+#Weighted Euclidian distance matrix
+#positions = matrix with:
+#nr of rows= nr of locations; 
+#nr of columns = nr of dimensions
+
+#weights= weights attributed to the two dimensions
+WEuclid <- function(positions, weights)
+{
+  #First empty distance matrix
+  distances     <- diag(nrow(positions))*0
+  #Calculate weighted Euclidian distance between all points
+  for (p in 1:nrow(positions))
+  {
+    position <- as.numeric(positions[p,])
+    position <- t(matrix(position,ncol=n, nrow=traits))
+    distance <- sqrt(rowSums(((weights)*(positions - position))^2))
+    distances[p,]    <- distance
+  }
+  return(distances)
+}
+
+
+
+
 #Partition according to Fox 2005
 #M = vector with monocultures
 #Yo = vector with observed yields
