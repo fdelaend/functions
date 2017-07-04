@@ -13,7 +13,8 @@ WEuclid <- function(positions, weights)
   for (p in 1:nrow(positions))
   {
     position <- as.numeric(positions[p,])
-    position <- t(matrix(position,ncol=n, nrow=traits))
+    position <- t(matrix(position,ncol=nrow(positions), 
+                         nrow=ncol(positions)))
     distance <- sqrt(rowSums(((weights)*(positions - position))^2))
     distances[p,]    <- distance
   }
@@ -421,29 +422,38 @@ PlotEvennessRichness <- function(Filename, CountCols, TimeName,
   dev.off()
 }
 
-#gets BD and EF using cosm data in the standard WUR file format
-#also: gets EF in systems that are treated but without species loss
-#Filename = name of txt file with count data
-#TreatmentName = name in the count data file used to indicate treatment level. 
-#...Always needs to be 'Treatment'. Control always needs to be '1'.
-#TimeName = name in the count data file used to indicate time
-#Only time points that are >Affected and <NoAffected are considered
+#gets BD and EF from a data frame containing 
+#...counts and EF observed at specific time points 
+#...and levels of environmental change. 
+#...If counts are not available, 
+#...richness should be included as a variable in the data frame.
+#data = data frame containing counts or (relative) densities, 
+#...point in time, level of env change
 #CountCols = columns where species counts are present: 
-#...a vector with length = 2. If length = 1, 
+#...a vector with length = 2 (start and end). If length = 1, 
 #...it is assumed species counts start at CountCols and 
-#...continue until the last column (ncol()). 
-#CountCols should be set to NA when there are no counts in the dataframe
+#...continue until the last column (ncol(data)). 
+#...CountCols should be set to NA when 
+#...there are no counts in the dataframe (and richness is given directly)
+#TimeName = name in the count data file used to indicate time
+#TreatmentName = name in the count data file used to indicate treatment level. 
+#...Sadly, the function only works when this is 'Treatment'. 
+#...A level of '1' should be used to denote absence of change ('control').
+#Affected and NoAffected: 
+#...Only time points that are >Affected and <NoAffected are considered
 #endpoints= a list of endpoints. 
-#...Note that only Richness or Evenness can be given
+#...At the moment, only Richness or Evenness can be given
 #...Similarity is calculated by default if counts are given
 #...(should not be specified in endpoints)
 #systemTag = either NULL (no tag) or a string pointing to the 
-#...column that contains info on the system identity.
+#...column that contains info on the system type.
 #...If this is included, similarities will only 
 #...be calculated between sites that carry the same system tag.
-#Binary = passed on to the vegdist function
+#...This can be handy when calculating similarity over time *within*
+#...experimental units. 
+#Binary = passed on to the vegdist function. 
 #x = a fraction; if a species is present less than that fraction 
-#...times the nr of observations it is thrown away
+#...times the nr of observations, it is thrown away. 
 BDEF <- function(data, CountCols, TimeName, TreatmentName, 
                  Affected, NoAffected, 
                  endpoints = c("Richness", "Evenness"),
@@ -452,17 +462,10 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
                  x=0)
 {
   data[,TreatmentName] <- as.factor(data[,TreatmentName])
-  #do not replace NAs by zeros
-  nas <- which(is.na(data))#,arr.ind=TRUE
-  if (length(nas)>0) 
-  {
-    #data[is.na(data)] <- 0
-    print("NAs in data; not replaced by zeros") 
-  }
-  
+
   #get only data between 'Affected' and 'NoAffected'
-  dataPost <- data[which(data[,TimeName]>Affected),]
-  dataPost <- dataPost[which(dataPost[,TimeName]<NoAffected),]
+  dataPost             <- data[which(data[,TimeName]>Affected),]
+  dataPost             <- dataPost[which(dataPost[,TimeName]<NoAffected),]
 
   #0/Test if the dataframe contains counts. 
   #If so, make an object 'counts' 
@@ -472,29 +475,29 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
   {
     if (length(CountCols)==1) {CountCols <- c(CountCols: ncol(dataPost))}
     #Take out real count data 
-    counts <- dataPost[,CountCols]
+    counts             <- dataPost[,CountCols]
     #remove species that occur less than x% of the time
     rare <- which(colSums(counts>0, na.rm=TRUE)<x*nrow(counts))
     if (length(rare) > 0) {counts <- counts[,-rare]}
     #remove empty sites
-    empty <- which(as.numeric(rowSums(counts))==0)
+    empty               <- which(as.numeric(rowSums(counts))==0)
     if (length(empty) > 0) 
     {
-      counts <- counts[-empty,]
-      dataPost <- dataPost[-empty,]
+      counts            <- counts[-empty,]
+      dataPost          <- dataPost[-empty,]
     }
-    Sims <- data.matrix(vegdist(counts))
-    if (Binary) {Sims <- data.matrix(vegdist(decostand(counts,
+    Sims                <- data.matrix(vegdist(counts))
+    if (Binary) {Sims   <- data.matrix(vegdist(decostand(counts,
                                                        method="pa")))}
-    diag(Sims) <- NA #To see why this is needed, check below
-    Sims <- 1-Sims #cause vegdist calculates dissimilarity
+    diag(Sims)          <- NA #To see why this is needed, check below
+    Sims                <- 1-Sims #Because vegdist calculates dissimilarity
     #now loop over all rows 
     #to get Sim with control at same time point
-    dataPost$Sim <- NA
+    dataPost$Sim        <- NA
     for (row in c(1:nrow(dataPost)))
     {
       #look for row with same time point but treatment of 1
-      Ind <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName]))
+      Ind               <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName]))
       #When 'row' is a control row (i.e. when dataPost$Treatment[row]==1),
       #...this 'row' will also be contained in Ind
       #...and you don't want this since you're comparing a row to itself 
@@ -502,7 +505,7 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
       #...so that's why the diagonal of Sims need to be 'NA'.
       if (is.null(systemTag)==FALSE) 
       {
-        Ind <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName])&(dataPost[,systemTag]==dataPost[row,systemTag]))
+        Ind             <- which((dataPost$Treatment==1)&(dataPost[,TimeName]==dataPost[row,TimeName])&(dataPost[,systemTag]==dataPost[row,systemTag]))
       }
       dataPost$Sim[row] <- mean(Sims[row,Ind], na.rm=TRUE)
     }
@@ -512,7 +515,7 @@ BDEF <- function(data, CountCols, TimeName, TreatmentName,
   if ("Richness" %in% endpoints)
   {
     #chck if already in data frame; if not do it yrself
-    test <- ("Richness" %in% colnames(dataPost)) 
+    test                <- ("Richness" %in% colnames(dataPost)) 
     if (test==TRUE) {richness <- dataPost[,"Richness"]} else {dataPost$Richness <- rowSums(counts>0)}
   }
 
